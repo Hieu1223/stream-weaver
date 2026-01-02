@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Compass, Clock, ThumbsUp, ListVideo, Users, Flame } from 'lucide-react';
+import { Home, Clock, ThumbsUp, ListVideo, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -9,8 +9,6 @@ interface SidebarProps {
 
 const navItems = [
   { icon: Home, label: 'Home', path: '/' },
-  { icon: Flame, label: 'Trending', path: '/trending' },
-  { icon: Compass, label: 'Explore', path: '/explore' },
 ];
 
 const libraryItems = [
