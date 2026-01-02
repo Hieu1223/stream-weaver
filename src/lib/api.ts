@@ -1,7 +1,9 @@
 import { 
   Channel, Video, Playlist, Comment, 
   MessageResponse, AuthResponse, CreateCommentResponse, CreateVideoResponse ,
-  UpdateChannelData,UpdateChannelResponse,UpdateVideoData,UpdateVideoResponse,HistoryUpdateResponse,WatchProgress,ReactionResponse,ReactionStatus,ReactionType,TargetType
+  UpdateChannelData,UpdateChannelResponse,UpdateVideoData,UpdateVideoResponse,HistoryUpdateResponse,WatchProgress,ReactionResponse,ReactionStatus,ReactionType,TargetType,
+  LightWeightVideo,
+  LightWeightChannel
 } from './models';
 
 const BASE_URL = "http://localhost:8000";
@@ -45,7 +47,13 @@ export const createChannel = (data: Partial<Channel> & { password?: string }): P
   _request("/management/channels/", { method: "POST", body: JSON.stringify(data) });
 
 export const getChannelDetail = (id: string): Promise<Channel> => 
-  _request(`/management/channels/${id}`);
+  _request(`/management/channels/${id}`).then((channel: Channel) => {
+    let path = channel.profile_pic_path;
+    if (path && path.includes('files/')) {
+      path = `http://localhost:8000/${path}.jpg`;
+    }
+    return { ...channel, profile_pic_path: path };
+  });
 
 
 export const updateChannel = async (
@@ -105,10 +113,10 @@ export const createVideo = (channelId: string, authToken: string, title: string,
 export const getVideoDetail = (videoId: string, viewer_id: string | null): Promise<Video> => 
   _request(`/management/video/aggregate/${videoId}`, { method: "POST", body: JSON.stringify({ viewer_id }) });
 
-export const getAccessibleVideos = (viewer_id: string | null, page = 0, pageSize = 10): Promise<{video_id: string}[]> => 
+export const getAccessibleVideos = (viewer_id: string | null, page = 0, pageSize = 10): Promise<LightWeightVideo[]> => 
   _request(`/management/video/accessible${_buildQuery({ page, page_size: pageSize })}`, { method: "POST", body: JSON.stringify({ viewer_id }) });
 
-export const getChannelVideos = (channelId: string, auth_token: string | null): Promise<Video[]> => 
+export const getChannelVideos = (channelId: string, auth_token: string | null): Promise<LightWeightVideo[]> => 
   _request(`/management/video/channel/${channelId}`, { method: "POST", body: JSON.stringify({ auth_token }) });
 
 export const searchVideos = (keyword: string, page = 0, pageSize = 10): Promise<Partial<Video>[]> => 
@@ -185,14 +193,14 @@ export const listSubscriptions = async (
   authToken: string,
   page = 0,
   pageSize = 10
-): Promise<Channel[]> => {
+): Promise<LightWeightChannel[]> => {
   // Build query string for pagination
   const params = new URLSearchParams({
     page: page.toString(),
     page_size: pageSize.toString(),
   });
 
-  return _request<Channel[]>(`/management/subscription/list?${params.toString()}`, {
+  return _request<LightWeightChannel[]>(`/management/subscription/list?${params.toString()}`, {
     method: "POST",
     body: JSON.stringify({
       subscriber_id: subscriberId,
@@ -288,6 +296,29 @@ export const setReaction = (
       reaction 
     }) 
   });
+
+/**
+ * Get the list of videos liked by the current user with pagination.
+ */
+export const getLikedVideos = (
+  viewer_id: string,
+  auth_token: string,
+  page: number = 0,
+  page_size: number = 20
+): Promise<{ 
+  page: number; 
+  page_size: number; 
+  total: number; 
+  videos: LightWeightVideo[]
+}> => 
+  _request(`/management/video/liked${_buildQuery({ 
+    viewer_id, 
+    auth_token, 
+    page, 
+    page_size 
+  })}`);
+
+
 
 /**
  * Get the current reaction of a user for a video or comment.

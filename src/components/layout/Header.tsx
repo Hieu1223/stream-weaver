@@ -17,13 +17,6 @@ interface HeaderProps {
   onMenuClick?: () => void;
 }
 
-const convert_thumbnail = (path) =>{
-  var profile_pic_path = path
-  if (profile_pic_path?.includes('files/')){
-    profile_pic_path = `http://localhost:8000/${profile_pic_path}.jpg`
-  }
-  return profile_pic_path
-}
 
 export const Header = ({ onMenuClick }: HeaderProps) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,7 +83,7 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0">
                     <Avatar className="h-9 w-9">
-                      <AvatarImage src={convert_thumbnail(channel.profile_pic_path)} />
+                      <AvatarImage src={channel.profile_pic_path} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
                         {channel?.display_name?.charAt(0).toUpperCase() || 'U'}
                       </AvatarFallback>
@@ -100,7 +93,6 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
                 <DropdownMenuContent align="end" className="w-56">
                   <div className="px-2 py-1.5">
                     <p className="font-medium">{channel?.display_name}</p>
-                    <p className="text-sm text-muted-foreground truncate">@{channel?.username}</p>
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate(`/channel/${channel?.channel_id}`)}>

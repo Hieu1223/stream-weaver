@@ -40,7 +40,7 @@ export const VideoCard = ({ video, onDelete }: VideoCardProps) => {
   const thumbnailUrl = local_thumbnail
     ? `http://localhost:8000/${video.thumbnail_path}.jpg`
     : video.thumbnail_path;
-  console.log(video.video_path)
+  console.log(video)
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
 

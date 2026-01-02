@@ -57,6 +57,7 @@ export const WatchPage = () => {
         // Fetch User's current Reaction
         const reactionData = await api.getReaction(channel.channel_id, 'video', videoId);
         setUserReaction(reactionData.reaction);
+        handleProgressUpdate(0)
       }
 
       // Related Videos Logic
@@ -73,11 +74,11 @@ export const WatchPage = () => {
       setIsLoading(false);
     }
   };
-
+  
   const handleProgressUpdate = async (seconds: number) => {
     if (isAuthenticated && channel && token && videoId) {
       try {
-        await api.updateWatchHistory(channel.channel_id, videoId, seconds, token);
+        const t =  await api.updateWatchHistory(channel.channel_id, videoId, seconds, token);
       } catch (err) {
         console.error('Progress sync failed');
       }

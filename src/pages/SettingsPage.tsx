@@ -148,7 +148,6 @@ export const SettingsPage = () => {
             </div>
             <div>
               <h3 className="font-semibold">{channel.display_name}</h3>
-              <p className="text-sm text-muted-foreground">@{channel.username}</p>
             </div>
           </div>
 

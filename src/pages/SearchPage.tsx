@@ -97,7 +97,7 @@ export const SearchPage = () => {
                     className="flex items-center gap-4 p-4 bg-secondary rounded-xl hover:bg-secondary/80 transition-colors"
                   >
                     <Avatar className="w-16 h-16">
-                      <AvatarImage src={ch.profile_pic_path !== 'no' ? ch.profile_pic_path : undefined} />
+                      <AvatarImage src={ch.profile_pic_path} />
                       <AvatarFallback className="bg-primary text-primary-foreground text-xl">
                         {ch.display_name?.charAt(0).toUpperCase() || 'C'}
                       </AvatarFallback>

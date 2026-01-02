@@ -75,7 +75,6 @@ export const SubscriptionsPage = () => {
       </Layout>
     );
   }
-
   return (
     <Layout>
       <Helmet>

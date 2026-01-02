@@ -1,8 +1,10 @@
+
+export type ReactionType = 'like' | 'dislike' | 'none';
+export type TargetType = 'video' | 'comment';
 // --- Base Entities ---
 export interface Channel {
   channel_id: string;
   display_name: string;
-  username?: string;
   description: string;
   profile_pic_path: string;
   subscriber_count: number;
@@ -63,6 +65,7 @@ export interface CreateVideoResponse {
   video: Video;
 }
 
+
 export interface UpdateChannelResponse {
   message: string;
   auth_token: string | null;
@@ -95,18 +98,12 @@ export interface UpdateVideoResponse {
 export interface WatchProgress {
   video_id: string;
   last_position_second: number;
-  updated_at?: string;
-  // Depending on your backend, it might also return video details
-  title?: string;
-  thumbnail_path?: string;
 }
 
 export interface HistoryUpdateResponse {
   message: string;
 }
 
-export type ReactionType = 'like' | 'dislike' | 'none';
-export type TargetType = 'video' | 'comment';
 
 export interface ReactionResponse {
   message: string;
@@ -115,3 +112,22 @@ export interface ReactionResponse {
 export interface ReactionStatus {
   reaction: ReactionType;
 }
+
+
+export interface LightWeightVideo{
+  video_id: string;
+  channel_id: string;
+  title: string;
+  upload_time: string;
+  thumbnail_path: string;
+  views_count: number;
+  last_position_second?: number | null;
+}
+
+
+export interface LightWeightChannel{
+  channel_id: string;
+  display_name: string;
+  profile_pic_path: string;
+}
+

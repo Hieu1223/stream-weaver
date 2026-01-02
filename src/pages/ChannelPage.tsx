@@ -109,10 +109,6 @@ export const ChannelPage = () => {
       </Layout>
     );
   }
-  var profile_pic_path = channelData.profile_pic_path
-  if (profile_pic_path.includes('files/')){
-    profile_pic_path = `http://localhost:8000/${profile_pic_path}.jpg`
-  }
   return (
     <Layout>
       <div className="space-y-6">
@@ -123,7 +119,7 @@ export const ChannelPage = () => {
         <div className="flex flex-wrap items-start gap-6">
           <Avatar className="w-24 h-24 -mt-12 ring-4 ring-background">
             <AvatarImage 
-              src={profile_pic_path} 
+              src={channel.profile_pic_path} 
             />
             <AvatarFallback className="text-3xl bg-primary text-primary-foreground">
               {channelData.display_name.charAt(0).toUpperCase()}
