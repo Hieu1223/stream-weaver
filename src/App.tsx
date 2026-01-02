@@ -14,6 +14,10 @@ import { UploadPage } from "@/pages/UploadPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { SearchPage } from "@/pages/SearchPage";
 import { EditVideoPage } from "@/pages/EditVideoPage";
+import { HistoryPage } from "@/pages/HistoryPage";
+import { LikedVideosPage } from "@/pages/LikedVideosPage";
+import { PlaylistsPage } from "@/pages/PlaylistsPage";
+import { SubscriptionsPage } from "@/pages/SubscriptionsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,7 +40,10 @@ const App = () => (
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/edit/:videoId" element={<EditVideoPage />} />
-              <Route path="*" element={<NotFound />} />
+              <Route path="/history" element={<HistoryPage />} />
+              <Route path="/liked" element={<LikedVideosPage />} />
+              <Route path="/playlists" element={<PlaylistsPage />} />
+              <Route path="/subscriptions" element={<SubscriptionsPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
