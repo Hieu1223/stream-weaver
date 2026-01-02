@@ -1,4 +1,5 @@
-import { useState } from 'react';
+
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, Save, Trash2, AlertTriangle } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
@@ -27,9 +28,26 @@ export const SettingsPage = () => {
   const { channel, token, logout, refreshChannel, isAuthenticated } = useAuth();
   const [displayName, setDisplayName] = useState(channel?.display_name || '');
   const [description, setDescription] = useState(channel?.description || '');
+
+  // New States for Profile Picture
+  const [profileFile, setProfileFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle File Selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setProfileFile(file);
+      // Create a local preview URL
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
+  };
 
   const handleSave = async () => {
     if (!channel || !token) return;
@@ -41,12 +59,16 @@ export const SettingsPage = () => {
 
     setIsSaving(true);
     try {
+      // Updated to match the new multipart API signature
       await api.updateChannel(channel.channel_id, {
-        display_name: displayName,
-        description,
         auth_token: token,
+        display_name: displayName,
+        description: description,
+        profile_pic: profileFile || undefined, // Pass the file if selected
       });
+
       await refreshChannel();
+      setProfileFile(null); // Clear pending file
       toast.success('Channel updated successfully!');
     } catch (err: any) {
       toast.error(err?.detail || 'Failed to update channel');
@@ -81,7 +103,10 @@ export const SettingsPage = () => {
       </Layout>
     );
   }
-
+  var profile_pic_path = channel.profile_pic_path
+  if (profile_pic_path.includes('files/')) {
+    profile_pic_path = `http://localhost:8000/${profile_pic_path}.jpg`
+  }
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-8">
@@ -95,15 +120,27 @@ export const SettingsPage = () => {
           <div className="flex items-center gap-6">
             <div className="relative">
               <Avatar className="w-24 h-24">
-                <AvatarImage 
-                  src={channel.profile_pic_path !== 'no' ? channel.profile_pic_path : undefined} 
+                <AvatarImage
+                  // Use local preview if available, otherwise fallback to saved path
+                  src={previewUrl || (profile_pic_path)}
                 />
                 <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
                   {displayName.charAt(0).toUpperCase() || 'U'}
                 </AvatarFallback>
               </Avatar>
+
+              {/* Hidden File Input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleFileChange}
+              />
+
               <button
                 type="button"
+                onClick={() => fileInputRef.current?.click()}
                 className="absolute bottom-0 right-0 p-2 bg-secondary rounded-full border border-border hover:bg-muted transition-colors"
               >
                 <Camera className="w-4 h-4" />
@@ -156,13 +193,13 @@ export const SettingsPage = () => {
             <AlertTriangle className="w-5 h-5" />
             Danger Zone
           </h2>
-          
+
           <div className="p-4 border border-destructive/30 rounded-xl bg-destructive/5">
             <h3 className="font-medium">Delete Channel</h3>
             <p className="text-sm text-muted-foreground mt-1">
               Permanently delete your channel and all associated videos. This action cannot be undone.
             </p>
-            
+
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" className="mt-4">

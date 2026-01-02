@@ -21,7 +21,7 @@ export interface Video {
   views_count: number;
   like_count: number;
   dislike_count: number;
-  privacy: 'public' | 'private';
+  privacy: 'public' | 'private' | 'limited';
   last_position_second?: number | null;
 }
 
@@ -61,4 +61,46 @@ export interface CreateCommentResponse {
 export interface CreateVideoResponse {
   message: string;
   video: Video;
+}
+
+export interface UpdateChannelResponse {
+  message: string;
+  auth_token: string | null;
+  channel: Channel; // The full updated channel object
+}
+
+export interface UpdateChannelData {
+  auth_token: string;
+  display_name?: string;
+  description?: string;
+  username?: string;
+  password?: string;
+  profile_pic?: Blob | File; // Now supports binary upload
+}
+
+export interface UpdateVideoData {
+  auth_token: string;
+  title?: string;
+  description?: string;
+  privacy?: 'public' | 'private' | 'limited';
+  thumbnail_file?: Blob | File; // Binary file for the thumbnail
+}
+
+export interface UpdateVideoResponse {
+  message: string;
+  video: Video; // The full video object returned from the DB
+}
+
+
+export interface WatchProgress {
+  video_id: string;
+  last_position_second: number;
+  updated_at?: string;
+  // Depending on your backend, it might also return video details
+  title?: string;
+  thumbnail_path?: string;
+}
+
+export interface HistoryUpdateResponse {
+  message: string;
 }

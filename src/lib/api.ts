@@ -1,6 +1,7 @@
 import { 
   Channel, Video, Playlist, Comment, 
-  MessageResponse, AuthResponse, CreateCommentResponse, CreateVideoResponse 
+  MessageResponse, AuthResponse, CreateCommentResponse, CreateVideoResponse ,
+  UpdateChannelData,UpdateChannelResponse,UpdateVideoData,UpdateVideoResponse,HistoryUpdateResponse,WatchProgress
 } from './models';
 
 const BASE_URL = "http://localhost:8000";
@@ -46,8 +47,40 @@ export const createChannel = (data: Partial<Channel> & { password?: string }): P
 export const getChannelDetail = (id: string): Promise<Channel> => 
   _request(`/management/channels/${id}`);
 
-export const updateChannel = (id: string, data: any): Promise<MessageResponse> => 
-  _request(`/management/channels/${id}`, { method: "PUT", body: JSON.stringify(data) });
+
+export const updateChannel = async (
+  channelId: string, 
+  data: UpdateChannelData
+): Promise<UpdateChannelResponse> => {
+  const formData = new FormData();
+
+  // Append all non-null fields to the FormData object
+  formData.append("auth_token", data.auth_token);
+  
+  if (data.display_name) formData.append("display_name", data.display_name);
+  if (data.description) formData.append("description", data.description);
+  if (data.username) formData.append("username", data.username);
+  if (data.password) formData.append("password", data.password);
+  
+  if (data.profile_pic) {
+    formData.append("profile_pic", data.profile_pic);
+  }
+
+  // We use fetch directly here because our _request helper 
+  // defaults to JSON Content-Type headers.
+  const response = await fetch(`${BASE_URL}/management/channels/${channelId}`, {
+    method: "PUT",
+    body: formData,
+    // Note: Do NOT set Content-Type header manually; 
+    // the browser will set it to multipart/form-data with the correct boundary.
+  });
+
+  if (!response.ok) {
+    throw { status: response.status, ...(await response.json()) };
+  }
+
+  return response.json();
+};
 
 export const listChannels = (page = 0, pageSize = 10): Promise<Partial<Channel>[]> => 
   _request(`/management/channels/${_buildQuery({ page, page_size: pageSize })}`);
@@ -81,6 +114,44 @@ export const getChannelVideos = (channelId: string, auth_token: string | null): 
 export const searchVideos = (keyword: string, page = 0, pageSize = 10): Promise<Partial<Video>[]> => 
   _request(`/management/video/search${_buildQuery({ keyword, page, page_size: pageSize })}`);
 
+
+export const updateVideo = async (
+  channelId: string,
+  videoId: string,
+  data: UpdateVideoData
+): Promise<UpdateVideoResponse> => {
+  const formData = new FormData();
+
+  // Required Auth
+  formData.append("auth_token", data.auth_token);
+
+  // Optional Fields
+  if (data.title) formData.append("title", data.title);
+  if (data.description) formData.append("description", data.description);
+  if (data.privacy) formData.append("privacy", data.privacy);
+  
+  // Optional Thumbnail File
+  if (data.thumbnail_file) {
+    formData.append("thumbnail_file", data.thumbnail_file);
+  }
+
+  const response = await fetch(
+    `${BASE_URL}/management/video/channel/${channelId}/${videoId}`, 
+    {
+      method: "PUT",
+      body: formData,
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: "Failed to update video" }));
+    throw { status: response.status, ...error };
+  }
+
+  return response.json();
+};
+
+
 export const likeVideo = (id: string): Promise<MessageResponse> => _request(`/management/video/${id}/like`, { method: "POST" });
 export const dislikeVideo = (id: string): Promise<MessageResponse> => _request(`/management/video/${id}/dislike`, { method: "POST" });
 export const viewVideo = (id: string): Promise<MessageResponse> => _request(`/management/video/${id}/view`, { method: "POST" });
@@ -111,6 +182,29 @@ export const subscribe = (channel_id: string, subscriber_id: string, auth_token:
 export const unsubscribe = (channel_id: string, subscriber_id: string, auth_token: string): Promise<MessageResponse> => 
   _request("/management/subscription/", { method: "DELETE", body: JSON.stringify({ channel_id, subscriber_id, auth_token }) });
 
+export const listSubscriptions = async (
+  subscriberId: string,
+  authToken: string,
+  page = 0,
+  pageSize = 10
+): Promise<Channel[]> => {
+  // Build query string for pagination
+  const params = new URLSearchParams({
+    page: page.toString(),
+    page_size: pageSize.toString(),
+  });
+
+  return _request<Channel[]>(`/management/subscription/list?${params.toString()}`, {
+    method: "POST",
+    body: JSON.stringify({
+      subscriber_id: subscriberId,
+      auth_token: authToken,
+    }),
+  });
+};
+
+
+
 // --- COMMENTS ---
 export const createComment = (data: { video_id: string, user_id: string, content: string, auth_token: string }): Promise<CreateCommentResponse> => 
   _request("/management/comments/", { method: "POST", body: JSON.stringify(data) });
@@ -126,3 +220,43 @@ export const deleteComment = (id: string, auth_token: string): Promise<MessageRe
 
 export const likeComment = (id: string): Promise<MessageResponse> => _request(`/management/comments/${id}/like`, { method: "POST" });
 export const dislikeComment = (id: string): Promise<MessageResponse> => _request(`/management/comments/${id}/dislike`, { method: "POST" });
+
+// --- HISTORY ---
+
+/**
+ * Fetches the user's watch history.
+ * Uses POST to keep the auth_token in the request body.
+ */
+export const getWatchHistory = async (
+  channelId: string,
+  authToken: string
+): Promise<WatchProgress[]> => {
+  return _request<WatchProgress[]>("/history/", {
+    method: "POST",
+    body: JSON.stringify({
+      channel_id: channelId,
+      auth_token: authToken,
+    }),
+  });
+};
+
+/**
+ * Updates the current playback position for a specific video.
+ * Triggered periodically during video playback.
+ */
+export const updateWatchHistory = async (
+  channelId: string,
+  videoId: string,
+  seconds: number,
+  authToken: string
+): Promise<HistoryUpdateResponse> => {
+  return _request<HistoryUpdateResponse>("/history/", {
+    method: "PUT",
+    body: JSON.stringify({
+      channel_id: channelId,
+      video_id: videoId,
+      seconds: seconds,
+      auth_token: authToken,
+    }),
+  });
+};

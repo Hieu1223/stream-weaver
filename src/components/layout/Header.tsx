@@ -17,6 +17,14 @@ interface HeaderProps {
   onMenuClick?: () => void;
 }
 
+const convert_thumbnail = (path) =>{
+  var profile_pic_path = path
+  if (profile_pic_path?.includes('files/')){
+    profile_pic_path = `http://localhost:8000/${profile_pic_path}.jpg`
+  }
+  return profile_pic_path
+}
+
 export const Header = ({ onMenuClick }: HeaderProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const { channel, isAuthenticated, logout } = useAuth();
@@ -67,7 +75,7 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
 
         {/* Right section */}
         <div className="flex items-center gap-2">
-          {isAuthenticated ? (
+          {isAuthenticated && channel ? (
             <>
               <Button 
                 variant="ghost" 
@@ -82,7 +90,7 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0">
                     <Avatar className="h-9 w-9">
-                      <AvatarImage src={channel?.profile_pic_path !== 'no' ? channel?.profile_pic_path : undefined} />
+                      <AvatarImage src={convert_thumbnail(channel.profile_pic_path)} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
                         {channel?.display_name?.charAt(0).toUpperCase() || 'U'}
                       </AvatarFallback>
