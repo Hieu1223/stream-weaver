@@ -104,3 +104,14 @@ export interface WatchProgress {
 export interface HistoryUpdateResponse {
   message: string;
 }
+
+export type ReactionType = 'like' | 'dislike' | 'none';
+export type TargetType = 'video' | 'comment';
+
+export interface ReactionResponse {
+  message: string;
+}
+
+export interface ReactionStatus {
+  reaction: ReactionType;
+}

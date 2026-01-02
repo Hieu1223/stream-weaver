@@ -1,7 +1,7 @@
 import { 
   Channel, Video, Playlist, Comment, 
   MessageResponse, AuthResponse, CreateCommentResponse, CreateVideoResponse ,
-  UpdateChannelData,UpdateChannelResponse,UpdateVideoData,UpdateVideoResponse,HistoryUpdateResponse,WatchProgress
+  UpdateChannelData,UpdateChannelResponse,UpdateVideoData,UpdateVideoResponse,HistoryUpdateResponse,WatchProgress,ReactionResponse,ReactionStatus,ReactionType,TargetType
 } from './models';
 
 const BASE_URL = "http://localhost:8000";
@@ -152,8 +152,6 @@ export const updateVideo = async (
 };
 
 
-export const likeVideo = (id: string): Promise<MessageResponse> => _request(`/management/video/${id}/like`, { method: "POST" });
-export const dislikeVideo = (id: string): Promise<MessageResponse> => _request(`/management/video/${id}/dislike`, { method: "POST" });
 export const viewVideo = (id: string): Promise<MessageResponse> => _request(`/management/video/${id}/view`, { method: "POST" });
 
 export const deleteVideo = (id: string, channel_id: string, auth_token: string): Promise<MessageResponse> => 
@@ -209,17 +207,23 @@ export const listSubscriptions = async (
 export const createComment = (data: { video_id: string, user_id: string, content: string, auth_token: string }): Promise<CreateCommentResponse> => 
   _request("/management/comments/", { method: "POST", body: JSON.stringify(data) });
 
-export const listComments = (videoId: string): Promise<Comment[]> => 
-  _request(`/management/comments/${videoId}`);
+export const listComments = (
+  videoId: string,
+  page: number = 0,
+  pageSize: number = 10
+): Promise<Comment[]> => {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    page_size: pageSize.toString(),
+  });
+  return _request(`/management/comments/${videoId}?${params.toString()}`);
+};
 
 export const updateComment = (id: string, content: string, auth_token: string): Promise<CreateCommentResponse> => 
   _request(`/management/comments/${id}`, { method: "PUT", body: JSON.stringify({ content, auth_token }) });
 
 export const deleteComment = (id: string, auth_token: string): Promise<MessageResponse> => 
   _request(`/management/comments/${id}`, { method: "DELETE", body: JSON.stringify({ auth_token }) });
-
-export const likeComment = (id: string): Promise<MessageResponse> => _request(`/management/comments/${id}/like`, { method: "POST" });
-export const dislikeComment = (id: string): Promise<MessageResponse> => _request(`/management/comments/${id}/dislike`, { method: "POST" });
 
 // --- HISTORY ---
 
@@ -231,7 +235,7 @@ export const getWatchHistory = async (
   channelId: string,
   authToken: string
 ): Promise<WatchProgress[]> => {
-  return _request<WatchProgress[]>("/history/", {
+  return _request<WatchProgress[]>("/management/history/", {
     method: "POST",
     body: JSON.stringify({
       channel_id: channelId,
@@ -250,7 +254,8 @@ export const updateWatchHistory = async (
   seconds: number,
   authToken: string
 ): Promise<HistoryUpdateResponse> => {
-  return _request<HistoryUpdateResponse>("/history/", {
+  console.log(channelId,seconds)
+  return _request<HistoryUpdateResponse>("/management/history/", {
     method: "PUT",
     body: JSON.stringify({
       channel_id: channelId,
@@ -260,3 +265,36 @@ export const updateWatchHistory = async (
     }),
   });
 };
+// --- REACTIONS ---
+
+/**
+ * React to a video or comment.
+ * reaction: "like", "dislike", or "none" (to remove)
+ */
+export const setReaction = (
+  channel_id: string,
+  auth_token: string,
+  target_type: TargetType,
+  target_id: string,
+  reaction: ReactionType
+): Promise<ReactionResponse> => 
+  _request("/management/reaction/", { 
+    method: "POST", 
+    body: JSON.stringify({ 
+      channel_id, 
+      auth_token, 
+      target_type, 
+      target_id, 
+      reaction 
+    }) 
+  });
+
+/**
+ * Get the current reaction of a user for a video or comment.
+ */
+export const getReaction = (
+  channel_id: string,
+  target_type: TargetType,
+  target_id: string
+): Promise<ReactionStatus> => 
+  _request(`/management/reaction/${_buildQuery({ channel_id, target_type, target_id })}`);

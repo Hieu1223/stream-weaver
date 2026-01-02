@@ -9,8 +9,9 @@ import { CommentSection } from '@/components/video/CommentSection';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Video, Channel } from '@/lib/models';
+import { Video, Channel, ReactionType } from '@/lib/models'; // Added ReactionType
 import { useAuth } from '@/contexts/AuthContext';
+import { cn } from '@/lib/utils'; // For conditional classes
 import * as api from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -26,12 +27,13 @@ export const WatchPage = () => {
   const [channelData, setChannelData] = useState<Channel | null>(null);
   const [relatedVideos, setRelatedVideos] = useState<Video[]>([]);
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [userReaction, setUserReaction] = useState<ReactionType>('none');
   const [isLoading, setIsLoading] = useState(true);
   const { channel, token, isAuthenticated } = useAuth();
 
   useEffect(() => {
     loadVideo();
-  }, [videoId]);
+  }, [videoId, channel?.channel_id]);
 
   const loadVideo = async () => {
     if (!videoId) return;
@@ -39,25 +41,32 @@ export const WatchPage = () => {
     
     try {
       const videoData = await api.getVideoDetail(videoId, channel?.channel_id || null);
-      console.log(videoData)
       setVideo(videoData);
+      
+      // Immediate View Registration
+      api.viewVideo(videoId).catch(err => console.error('View failed', err));
 
       const channelInfo = await api.getChannelDetail(videoData.channel_id);
       setChannelData(channelInfo);
 
-      // Load related videos
-      const accessibleIds = await api.getAccessibleVideos(channel?.channel_id || null, 0, 10);
-      const related = await Promise.all(
-        accessibleIds
-          .filter(v => v.video_id !== videoId)
-          .slice(0, 5)
-          .map(async (v) => {
-            const detail = await api.getVideoDetail(v.video_id, channel?.channel_id || null);
-            const ch = await api.getChannelDetail(detail.channel_id);
-            return { ...detail, display_name: ch.display_name, profile_pic_path: ch.profile_pic_path };
-          })
+      if (isAuthenticated && channel && token) {
+        // Fetch Subscription Status
+        const subs = await api.listSubscriptions(channel.channel_id, token, 0, 50);
+        setIsSubscribed(subs.some(s => s.channel_id === videoData.channel_id));
+
+        // Fetch User's current Reaction
+        const reactionData = await api.getReaction(channel.channel_id, 'video', videoId);
+        setUserReaction(reactionData.reaction);
+      }
+
+      // Related Videos Logic
+      const accessibleList = await api.getAccessibleVideos(channel?.channel_id || null, 0, 10);
+      const targetIds = accessibleList.filter(v => v.video_id !== videoId).slice(0, 6);
+      const fullRelatedVideos = await Promise.all(
+        targetIds.map(v => api.getVideoDetail(v.video_id, channel?.channel_id || null))
       );
-      setRelatedVideos(related);
+      setRelatedVideos(fullRelatedVideos);
+
     } catch (err) {
       toast.error('Failed to load video');
     } finally {
@@ -65,34 +74,34 @@ export const WatchPage = () => {
     }
   };
 
-  const handleView = async () => {
-    if (videoId) {
+  const handleProgressUpdate = async (seconds: number) => {
+    if (isAuthenticated && channel && token && videoId) {
       try {
-        await api.viewVideo(videoId);
+        await api.updateWatchHistory(channel.channel_id, videoId, seconds, token);
       } catch (err) {
-        console.error('Failed to register view');
+        console.error('Progress sync failed');
       }
     }
   };
 
-  const handleLike = async () => {
-    if (!videoId) return;
-    try {
-      await api.likeVideo(videoId);
-      loadVideo();
-      toast.success('Liked!');
-    } catch (err) {
-      toast.error('Failed to like video');
+  const handleReaction = async (type: 'like' | 'dislike') => {
+    if (!videoId || !channel || !token) {
+      toast.error('Please sign in to react');
+      return;
     }
-  };
 
-  const handleDislike = async () => {
-    if (!videoId) return;
+    // Toggle logic: if clicking same reaction, set to 'none'
+    const newReaction: ReactionType = userReaction === type ? 'none' : type;
+
     try {
-      await api.dislikeVideo(videoId);
-      loadVideo();
+      await api.setReaction(channel.channel_id, token, 'video', videoId, newReaction);
+      setUserReaction(newReaction);
+      
+      // Refresh video details to update counts
+      const updated = await api.getVideoDetail(videoId, channel.channel_id);
+      setVideo(updated);
     } catch (err) {
-      toast.error('Failed to dislike video');
+      toast.error('Failed to update reaction');
     }
   };
 
@@ -134,43 +143,31 @@ export const WatchPage = () => {
     );
   }
 
-  if (!video) {
-    return (
-      <Layout>
-        <div className="text-center py-20">
-          <h1 className="text-2xl font-bold">Video not found</h1>
-        </div>
-      </Layout>
-    );
-  }
+  if (!video) return null;
 
   return (
     <Layout>
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Main content */}
         <div className="xl:col-span-2 space-y-4">
-          <VideoPlayer videoPath={video.video_path} onView={handleView} />
+          <VideoPlayer 
+            videoPath={video.video_path} 
+            onProgress={handleProgressUpdate} 
+          />
 
           <h1 className="text-xl font-bold">{video.title}</h1>
 
           <div className="flex flex-wrap items-center justify-between gap-4">
-            {/* Channel info */}
             <div className="flex items-center gap-4">
               <Link to={`/channel/${channelData?.channel_id}`}>
                 <Avatar className="w-12 h-12">
-                  <AvatarImage 
-                    src={channelData?.profile_pic_path !== 'no' ? channelData?.profile_pic_path : undefined} 
-                  />
+                  <AvatarImage src={channelData?.profile_pic_path} />
                   <AvatarFallback className="bg-primary text-primary-foreground">
-                    {channelData?.display_name?.charAt(0).toUpperCase() || 'C'}
+                    {channelData?.display_name?.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
               </Link>
               <div>
-                <Link 
-                  to={`/channel/${channelData?.channel_id}`}
-                  className="font-semibold hover:text-primary transition-colors"
-                >
+                <Link to={`/channel/${channelData?.channel_id}`} className="font-semibold hover:text-primary transition-colors">
                   {channelData?.display_name}
                 </Link>
                 <p className="text-sm text-muted-foreground">
@@ -184,41 +181,36 @@ export const WatchPage = () => {
                   variant={isSubscribed ? "secondary" : "default"}
                   className={!isSubscribed ? "glow" : ""}
                 >
-                  {isSubscribed ? (
-                    <>
-                      <BellOff className="w-4 h-4 mr-2" />
-                      Subscribed
-                    </>
-                  ) : (
-                    <>
-                      <Bell className="w-4 h-4 mr-2" />
-                      Subscribe
-                    </>
-                  )}
+                  {isSubscribed ? <BellOff className="w-4 h-4 mr-2" /> : <Bell className="w-4 h-4 mr-2" />}
+                  {isSubscribed ? "Subscribed" : "Subscribe"}
                 </Button>
               )}
             </div>
 
-            {/* Actions */}
             <div className="flex items-center gap-2">
-              <div className="flex items-center bg-secondary rounded-full">
+              <div className="flex items-center bg-secondary rounded-full overflow-hidden">
                 <Button 
                   variant="ghost" 
-                  size="sm"
-                  onClick={handleLike}
-                  className="rounded-l-full rounded-r-none px-4"
+                  size="sm" 
+                  onClick={() => handleReaction('like')} 
+                  className={cn(
+                    "rounded-none px-4 border-r border-background/20",
+                    userReaction === 'like' && "text-primary"
+                  )}
                 >
-                  <ThumbsUp className="w-4 h-4 mr-2" />
+                  <ThumbsUp className={cn("w-4 h-4 mr-2", userReaction === 'like' && "fill-current")} />
                   {formatCount(video.like_count)}
                 </Button>
-                <Separator orientation="vertical" className="h-6" />
                 <Button 
                   variant="ghost" 
-                  size="sm"
-                  onClick={handleDislike}
-                  className="rounded-r-full rounded-l-none px-4"
+                  size="sm" 
+                  onClick={() => handleReaction('dislike')} 
+                  className={cn(
+                    "rounded-none px-4",
+                    userReaction === 'dislike' && "text-destructive"
+                  )}
                 >
-                  <ThumbsDown className="w-4 h-4" />
+                  <ThumbsDown className={cn("w-4 h-4", userReaction === 'dislike' && "fill-current")} />
                 </Button>
               </div>
 
@@ -234,7 +226,6 @@ export const WatchPage = () => {
             </div>
           </div>
 
-          {/* Description */}
           <div className="bg-secondary rounded-xl p-4 space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <span>{formatCount(video.views_count)} views</span>
@@ -245,12 +236,9 @@ export const WatchPage = () => {
           </div>
 
           <Separator />
-
-          {/* Comments */}
           <CommentSection videoId={video.video_id} />
         </div>
 
-        {/* Related videos sidebar */}
         <div className="space-y-4">
           <h3 className="font-semibold">Related Videos</h3>
           <div className="space-y-3">
