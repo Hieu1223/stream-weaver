@@ -39,6 +39,7 @@ export const WatchPage = () => {
     
     try {
       const videoData = await api.getVideoDetail(videoId, channel?.channel_id || null);
+      console.log(videoData)
       setVideo(videoData);
 
       const channelInfo = await api.getChannelDetail(videoData.channel_id);

@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -19,103 +19,112 @@ interface VideoCardProps {
   onDelete?: () => void;
 }
 
-const formatViews = (count: number): string => {
-  if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M views`;
-  if (count >= 1000) return `${(count / 1000).toFixed(1)}K views`;
+const formatViews = (count: number) => {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M views`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K views`;
   return `${count} views`;
 };
 
-const getThumbnailUrl = (path: string): string => {
-  if (path.startsWith('http')) return path;
-  return `http://localhost:8000/${path}`;
-};
-
-const extractYouTubeId = (url: string): string | null => {
-  const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-  const match = url.match(regex);
-  return match ? match[1] : null;
-};
 
 export const VideoCard = ({ video, onDelete }: VideoCardProps) => {
-  const { channel, token } = useAuth();
   const navigate = useNavigate();
-  const isOwner = channel?.channel_id === video.channel_id;
-  
-  const isYouTube = video.video_path?.includes('youtube.com') || video.video_path?.includes('youtu.be');
-  const youtubeId = isYouTube ? extractYouTubeId(video.video_path) : null;
-  
-  const thumbnailUrl = youtubeId 
-    ? `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`
-    : getThumbnailUrl(video.thumbnail_path);
+  const { channel, token } = useAuth();
 
+  const isOwner = channel?.channel_id === video.channel_id;
+
+  const isYouTube =
+    video.video_path?.includes('youtube') ||
+    video.video_path?.includes('youtu.be');
+
+  const local_thumbnail = video.thumbnail_path.includes('files/')
+  const thumbnailUrl = local_thumbnail
+    ? `http://localhost:8000/${video.thumbnail_path}.jpg`
+    : video.thumbnail_path;
+  console.log(video.video_path)
   const handleDelete = async (e: React.MouseEvent) => {
-    e.preventDefault();
     e.stopPropagation();
-    
+
     if (!channel || !token) return;
-    
+
     try {
       await api.deleteVideo(video.video_id, channel.channel_id, token);
       toast.success('Video deleted');
       onDelete?.();
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete video');
     }
   };
 
   return (
-    <div className="group block animate-fade-in relative">
-      <Link to={`/watch/${video.video_id}`}>
-        <div className="relative aspect-video rounded-xl overflow-hidden bg-video-card mb-3">
-          <img
-            src={thumbnailUrl}
-            alt={video.title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = '/placeholder.svg';
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-background/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          
-          {/* Hover play button */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-            <div className="w-14 h-14 rounded-full bg-primary/90 flex items-center justify-center glow">
-              <svg className="w-6 h-6 text-primary-foreground ml-1" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            </div>
-          </div>
-        </div>
+    <div
+      className="group animate-fade-in relative cursor-pointer"
+      onClick={() => navigate(`/watch/${video.video_id}`)}
+    >
+      {/* Thumbnail */}
+      <div className="relative aspect-video rounded-xl overflow-hidden bg-video-card mb-3">
+        <img
+          src={thumbnailUrl}
+          alt={video.title}
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          onError={(e) => {
+            (e.currentTarget.src = '/placeholder.svg');
+          }}
+        />
 
-        <div className="flex gap-3">
-          <Link to={`/channel/${video.channel_id}`} onClick={(e) => e.stopPropagation()}>
-            <Avatar className="w-9 h-9">
-              <AvatarImage src={video.profile_pic_path !== 'no' ? video.profile_pic_path : undefined} />
-              <AvatarFallback className="bg-secondary text-foreground text-sm">
-                {video.display_name?.charAt(0).toUpperCase() || 'C'}
-              </AvatarFallback>
-            </Avatar>
-          </Link>
+        {/* Hover overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-background/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-          <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-sm line-clamp-2 group-hover:text-primary transition-colors">
-              {video.title}
-            </h3>
-            <Link 
-              to={`/channel/${video.channel_id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        {/* Play button */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="w-14 h-14 rounded-full bg-primary/90 flex items-center justify-center">
+            <svg
+              className="w-6 h-6 text-primary-foreground ml-1"
+              fill="currentColor"
+              viewBox="0 0 24 24"
             >
-              {video.display_name || 'Unknown Channel'}
-            </Link>
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <span>{formatViews(video.views_count)}</span>
-              <span>•</span>
-              <span>{formatDistanceToNow(new Date(video.upload_time), { addSuffix: true })}</span>
-            </div>
+              <path d="M8 5v14l11-7z" />
+            </svg>
           </div>
         </div>
-      </Link>
+      </div>
+
+      {/* Info row */}
+      <div className="flex gap-3">
+        {/* Channel avatar */}
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/channel/${video.channel_id}`);
+          }}
+        >
+          <Avatar className="w-9 h-9">
+            <AvatarImage src={video.profile_pic_path || undefined} />
+            <AvatarFallback>
+              {video.display_name?.[0]?.toUpperCase() ?? 'C'}
+            </AvatarFallback>
+          </Avatar>
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium text-sm line-clamp-2 group-hover:text-primary">
+            {video.title}
+          </h3>
+
+          <div
+            className="text-sm text-muted-foreground hover:text-foreground w-fit"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/channel/${video.channel_id}`);
+            }}
+          >
+            {video.display_name || 'Unknown Channel'}
+          </div>
+
+          <div className="text-xs text-muted-foreground flex gap-1">
+            <span>{formatViews(video.views_count)}</span>
+          </div>
+        </div>
+      </div>
 
       {/* Owner actions */}
       {isOwner && (
@@ -124,18 +133,28 @@ export const VideoCard = ({ video, onDelete }: VideoCardProps) => {
             <Button
               variant="ghost"
               size="icon"
-              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 backdrop-blur-sm h-8 w-8"
-              onClick={(e) => e.preventDefault()}
+              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 bg-background/80 backdrop-blur-sm h-8 w-8"
+              onClick={(e) => e.stopPropagation()}
             >
               <MoreVertical className="w-4 h-4" />
             </Button>
           </DropdownMenuTrigger>
+
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={(e) => { e.preventDefault(); navigate(`/edit/${video.video_id}`); }}>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/edit/${video.video_id}`);
+              }}
+            >
               <Pencil className="w-4 h-4 mr-2" />
               Edit
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleDelete} className="text-destructive">
+
+            <DropdownMenuItem
+              onClick={handleDelete}
+              className="text-destructive"
+            >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete
             </DropdownMenuItem>
