@@ -32,15 +32,7 @@ export const VideoCard = ({ video, onDelete }: VideoCardProps) => {
 
   const isOwner = channel?.channel_id === video.channel_id;
 
-  const isYouTube =
-    video.video_path?.includes('youtube') ||
-    video.video_path?.includes('youtu.be');
 
-  const local_thumbnail = video.thumbnail_path.includes('files/')
-  const thumbnailUrl = local_thumbnail
-    ? `http://localhost:8000/${video.thumbnail_path}.jpg`
-    : video.thumbnail_path;
-  console.log(video)
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
@@ -54,7 +46,7 @@ export const VideoCard = ({ video, onDelete }: VideoCardProps) => {
       toast.error('Failed to delete video');
     }
   };
-
+  console.log(video.thumbnail_path)
   return (
     <div
       className="group animate-fade-in relative cursor-pointer"
@@ -63,7 +55,7 @@ export const VideoCard = ({ video, onDelete }: VideoCardProps) => {
       {/* Thumbnail */}
       <div className="relative aspect-video rounded-xl overflow-hidden bg-video-card mb-3">
         <img
-          src={thumbnailUrl}
+          src={video.thumbnail_path}
           alt={video.title}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           onError={(e) => {

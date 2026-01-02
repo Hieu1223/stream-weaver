@@ -1,3 +1,4 @@
+import { channel } from 'diagnostics_channel';
 import { 
   Channel, Video, Playlist, Comment, 
   MessageResponse, AuthResponse, CreateCommentResponse, CreateVideoResponse ,
@@ -7,6 +8,8 @@ import {
 } from './models';
 
 const BASE_URL = "http://localhost:8000";
+
+
 
 // --- Internal Helper ---
 const _request = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
@@ -47,13 +50,7 @@ export const createChannel = (data: Partial<Channel> & { password?: string }): P
   _request("/management/channels/", { method: "POST", body: JSON.stringify(data) });
 
 export const getChannelDetail = (id: string): Promise<Channel> => 
-  _request(`/management/channels/${id}`).then((channel: Channel) => {
-    let path = channel.profile_pic_path;
-    if (path && path.includes('files/')) {
-      path = `http://localhost:8000/${path}.jpg`;
-    }
-    return { ...channel, profile_pic_path: path };
-  });
+  _request(`/management/channels/${id}`);
 
 
 export const updateChannel = async (
@@ -74,13 +71,9 @@ export const updateChannel = async (
     formData.append("profile_pic", data.profile_pic);
   }
 
-  // We use fetch directly here because our _request helper 
-  // defaults to JSON Content-Type headers.
   const response = await fetch(`${BASE_URL}/management/channels/${channelId}`, {
     method: "PUT",
     body: formData,
-    // Note: Do NOT set Content-Type header manually; 
-    // the browser will set it to multipart/form-data with the correct boundary.
   });
 
   if (!response.ok) {
@@ -90,10 +83,10 @@ export const updateChannel = async (
   return response.json();
 };
 
-export const listChannels = (page = 0, pageSize = 10): Promise<Partial<Channel>[]> => 
+export const listChannels = (page = 0, pageSize = 10): Promise<LightWeightChannel[]> => 
   _request(`/management/channels/${_buildQuery({ page, page_size: pageSize })}`);
 
-export const searchChannels = (keyword: string, page = 0, pageSize = 10): Promise<Partial<Channel>[]> => 
+export const searchChannels = (keyword: string, page = 0, pageSize = 10): Promise<LightWeightChannel[]> => 
   _request(`/management/channels/search/${_buildQuery({ keyword, page, page_size: pageSize })}`);
 
 export const deleteChannel = (id: string, auth_token: string): Promise<MessageResponse> => 
@@ -199,7 +192,7 @@ export const listSubscriptions = async (
     page: page.toString(),
     page_size: pageSize.toString(),
   });
-
+  console.log(`subid ${subscriberId}`)
   return _request<LightWeightChannel[]>(`/management/subscription/list?${params.toString()}`, {
     method: "POST",
     body: JSON.stringify({
@@ -262,7 +255,6 @@ export const updateWatchHistory = async (
   seconds: number,
   authToken: string
 ): Promise<HistoryUpdateResponse> => {
-  console.log(channelId,seconds)
   return _request<HistoryUpdateResponse>("/management/history/", {
     method: "PUT",
     body: JSON.stringify({
