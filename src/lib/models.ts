@@ -131,3 +131,7 @@ export interface LightWeightChannel{
   profile_pic_path: string;
 }
 
+
+export interface SubscriptionStatusResponse {
+  is_subscribed: boolean;
+}

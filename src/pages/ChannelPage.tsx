@@ -43,6 +43,7 @@ export const ChannelPage = () => {
       // 1. Fetch channel details (path conversion is handled inside api.ts)
       const data = await api.getChannelDetail(channelId);
       setChannelData(data);
+      console.log(data)
 
       // 2. Fetch channel videos
       const channelVideos = await api.getChannelVideos(
@@ -65,9 +66,8 @@ export const ChannelPage = () => {
 
       // 4. Check subscription status if user is logged in
       if (isAuthenticated && channel && !isOwner) {
-        const subs = await api.listSubscriptions(channel.channel_id, token || '', 0, 100);
-        const following = subs.some(s => s.channel_id === channelId);
-        setIsSubscribed(following);
+        const status = await api.checkSubscriptionStatus(channel.channel_id, channelId);
+        setIsSubscribed(status.is_subscribed);
       }
     } catch (err) {
       toast.error('Failed to load channel');
