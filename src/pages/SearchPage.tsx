@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Video, Channel } from '@/lib/models';
 import * as api from '@/lib/api';
+import { formatCount, formatRelativeTime } from '@/lib/utils';
 
 const LIMIT = 12;
 
@@ -188,7 +189,7 @@ export const SearchPage = () => {
                   <div>
                     <h3 className="font-semibold">{ch.display_name}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {ch.subscriber_count ?? 0} subs
+                      {formatCount(ch.subscriber_count ?? 0)} subscribers
                     </p>
                   </div>
                 </Link>

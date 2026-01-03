@@ -21,9 +21,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const savedToken = localStorage.getItem('auth_token');
     const savedChannelId = localStorage.getItem('channel_id');
+    const savedUsername = localStorage.getItem('username');
     if (savedToken && savedChannelId) {
       setToken(savedToken);
-      api.getChannelDetail(savedChannelId).then(setChannel).catch(() => logout());
+      api.getChannelDetail(savedChannelId).then(channelData => {
+        // Merge saved username into channel data
+        setChannel({ ...channelData, username: savedUsername || '' });
+      }).catch(() => logout());
     }
   }, []);
 
@@ -33,9 +37,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const channelData = await api.getChannelDetail(idResponse.channel_id);
     
     setToken(authResponse.auth_token);
-    setChannel(channelData);
+    setChannel({ ...channelData, username });
     localStorage.setItem('auth_token', authResponse.auth_token);
     localStorage.setItem('channel_id', idResponse.channel_id);
+    localStorage.setItem('username', username);
   };
 
   const register = async (displayName: string, username: string, password: string, description?: string) => {
@@ -47,9 +52,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (response.auth_token && response.channel_id) {
       setToken(response.auth_token);
       const channelData = await api.getChannelDetail(response.channel_id);
-      setChannel(channelData);
+      setChannel({ ...channelData, username });
       localStorage.setItem('auth_token', response.auth_token);
       localStorage.setItem('channel_id', response.channel_id);
+      localStorage.setItem('username', username);
     }
   };
 
@@ -58,6 +64,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setToken(null);
     localStorage.removeItem('auth_token');
     localStorage.removeItem('channel_id');
+    localStorage.removeItem('username');
   };
 
   const refreshChannel = async () => {

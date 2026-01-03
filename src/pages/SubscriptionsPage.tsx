@@ -1,32 +1,56 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Layout } from '@/components/layout/Layout';
 import { VideoCard } from '@/components/video/VideoCard';
 import { useAuth } from '@/contexts/AuthContext';
 import * as api from '@/lib/api';
 import { Video, LightWeightChannel, LightWeightVideo } from '@/lib/models';
-import { Users, LogIn, PlaySquare } from 'lucide-react';
+import { Users, LogIn, PlaySquare, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
+import { formatRelativeTime } from '@/lib/utils';
 
 const BASE_URL = "http://localhost:8000";
+const PAGE_SIZE = 12;
 
 export const SubscriptionsPage = () => {
   const { channel, token, isAuthenticated } = useAuth();
   const [subscriptions, setSubscriptions] = useState<LightWeightChannel[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [allChannelVideos, setAllChannelVideos] = useState<Video[]>([]);
 
-  // Improved helper: Don't break YouTube links, only fix local paths
+  const observer = useRef<IntersectionObserver | null>(null);
+
+  const lastVideoRef = useCallback(
+    (node: HTMLElement | null) => {
+      if (loadingMore) return;
+      if (observer.current) observer.current.disconnect();
+
+      observer.current = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting && hasMore) {
+          setPage(p => p + 1);
+        }
+      });
+
+      if (node) observer.current.observe(node);
+    },
+    [loadingMore, hasMore]
+  );
+
   const fixImgPath = (path: string | undefined | null) => {
     if (!path) return undefined;
-    if (path.startsWith('http')) return path; // Already a full URL (YouTube)
+    if (path.startsWith('http')) return path;
     if (path.includes('files/')) return `${BASE_URL}/${path}.jpg`;
     return path;
   };
 
+  // Initial fetch: get subscriptions and all their videos
   useEffect(() => {
     const fetchData = async () => {
       if (!channel?.channel_id || !token) {
@@ -36,23 +60,18 @@ export const SubscriptionsPage = () => {
 
       setLoading(true);
       try {
-        // 1. Get the list of subscribed channels
         const subs = await api.listSubscriptions(channel.channel_id, token, 0, 50);
         setSubscriptions(subs);
 
-        // 2. Fetch videos from each channel concurrently
         const results = await Promise.all(
           subs.map(async (sub) => {
             try {
-              const channelVideos = await api.getChannelVideos(sub.channel_id, token);
-              
-              // Map channel info onto each video
+              const channelVideos = await api.getChannelVideos(sub.channel_id, 0, 100, token);
               return channelVideos.map((v: LightWeightVideo) => ({
                 ...v,
                 thumbnail_path: fixImgPath(v.thumbnail_path),
                 display_name: sub.display_name,
                 profile_pic_path: fixImgPath(sub.profile_pic_path),
-                // Ensure upload_time is a date object for sorting
                 upload_time: v.upload_time
               }));
             } catch (err) {
@@ -62,16 +81,17 @@ export const SubscriptionsPage = () => {
           })
         );
 
-        // 3. Flatten the array of arrays and INTERLEAVE by sorting by date
         const interleavedVideos = results
           .flat()
           .sort((a, b) => {
             const dateA = new Date(a.upload_time || 0).getTime();
             const dateB = new Date(b.upload_time || 0).getTime();
-            return dateB - dateA; // Newest first
+            return dateB - dateA;
           });
 
-        setVideos(interleavedVideos as unknown as Video[]);
+        setAllChannelVideos(interleavedVideos as unknown as Video[]);
+        setVideos(interleavedVideos.slice(0, PAGE_SIZE) as unknown as Video[]);
+        setHasMore(interleavedVideos.length > PAGE_SIZE);
       } catch (error) {
         toast.error('Failed to load subscriptions');
         console.error(error);
@@ -86,6 +106,24 @@ export const SubscriptionsPage = () => {
       setLoading(false);
     }
   }, [isAuthenticated, channel?.channel_id, token]);
+
+  // Load more videos when page changes
+  useEffect(() => {
+    if (page === 0) return;
+
+    setLoadingMore(true);
+    const start = page * PAGE_SIZE;
+    const end = start + PAGE_SIZE;
+    const nextVideos = allChannelVideos.slice(start, end);
+
+    if (nextVideos.length > 0) {
+      setVideos(prev => [...prev, ...nextVideos] as Video[]);
+    }
+    if (end >= allChannelVideos.length) {
+      setHasMore(false);
+    }
+    setLoadingMore(false);
+  }, [page, allChannelVideos]);
 
   if (!isAuthenticated) {
     return (
@@ -161,11 +199,23 @@ export const SubscriptionsPage = () => {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
-          {videos.map((video, idx) => (
-            <VideoCard key={`${video.video_id}-${idx}`} video={video} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
+            {videos.map((video, idx) => (
+              <div
+                key={`${video.video_id}-${idx}`}
+                ref={idx === videos.length - 1 ? lastVideoRef : null}
+              >
+                <VideoCard video={video} />
+              </div>
+            ))}
+          </div>
+          {loadingMore && (
+            <div className="flex justify-center py-10">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+        </>
       )}
     </Layout>
   );
