@@ -139,8 +139,8 @@ export const getVideoDetail = (videoId: string, viewer_id: string | null): Promi
 export const getAccessibleVideos = (viewer_id: string | null, page = 0, pageSize = 10): Promise<LightWeightVideo[]> => 
   _request(`/management/video/accessible${_buildQuery({ page, page_size: pageSize })}`, { method: "POST", body: JSON.stringify({ viewer_id }) });
 
-export const getChannelVideos = (channelId: string, auth_token: string | null): Promise<LightWeightVideo[]> => 
-  _request(`/management/video/channel/${channelId}`, { method: "POST", body: JSON.stringify({ auth_token }) });
+export const getChannelVideos = (channelId: string,page:number,page_size:number, auth_token: string | null): Promise<LightWeightVideo[]> => 
+  _request(`/management/video/channel/${channelId}?page=${page}&page_size=${page_size}`, { method: "POST", body: JSON.stringify({ auth_token }) });
 
 export const searchVideos = (keyword: string, page = 0, pageSize = 10): Promise<Partial<Video>[]> => 
   _request(`/management/video/search${_buildQuery({ keyword, page, page_size: pageSize })}`);
