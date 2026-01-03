@@ -41,10 +41,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const register = async (displayName: string, username: string, password: string, description?: string) => {
     const response = await api.createChannel({ 
       display_name: displayName, 
-      username, 
-      password, 
       description: description || '' 
-    });
+    } as any);
     
     if (response.auth_token && response.channel_id) {
       setToken(response.auth_token);

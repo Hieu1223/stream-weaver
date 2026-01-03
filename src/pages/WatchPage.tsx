@@ -1,15 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { 
   ThumbsUp, ThumbsDown, Share2, Bookmark, 
-  Bell, BellOff, ListPlus, Loader2, LogIn, 
-  Plus
+  Bell, BellOff, ListPlus, Loader2, Plus
 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { VideoPlayer } from '@/components/video/VideoPlayer';
 import { VideoCard } from '@/components/video/VideoCard';
 import { CommentSection } from '@/components/video/CommentSection';
+import { PlaylistSidebar } from '@/components/video/PlaylistSidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -34,6 +34,8 @@ const formatCount = (count: number): string => {
 
 export const WatchPage = () => {
   const { videoId } = useParams<{ videoId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const playlistId = searchParams.get('playlist');
   const { channel, token, isAuthenticated } = useAuth();
 
   // State
@@ -43,6 +45,7 @@ export const WatchPage = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [userReaction, setUserReaction] = useState<ReactionType>('none');
   const [isLoading, setIsLoading] = useState(true);
+  const [showPlaylist, setShowPlaylist] = useState(!!playlistId);
 
   // Playlist Modal State
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -54,30 +57,22 @@ export const WatchPage = () => {
     setIsLoading(true);
     
     try {
-      // 1. Fetch Video Detail & Register View
       const videoData = await api.getVideoDetail(videoId, channel?.channel_id || null);
       setVideo(videoData);
       api.viewVideo(videoId).catch(() => {});
 
-      // 2. Fetch Channel Info
       const channelInfo = await api.getChannelDetail(videoData.channel_id);
       setChannelData(channelInfo);
 
-      // 3. Auth-dependent data
       if (isAuthenticated && channel && token) {
-        // Check subscription status
         const subStatus = await api.checkSubscriptionStatus(channel.channel_id, videoData.channel_id);
         setIsSubscribed(subStatus.is_subscribed);
-
-        // Fetch current reaction
         const reactionData = await api.getReaction(channel.channel_id, 'video', videoId);
         setUserReaction(reactionData.reaction);
       }
 
-      // 4. Related Videos (using accessible videos)
       const accessibleList = await api.getAccessibleVideos(channel?.channel_id || null, 0, 10);
       const filtered = accessibleList.filter(v => v.video_id !== videoId).slice(0, 8);
-      // Enriching lightweight videos to full Video objects for the cards if necessary
       const fullRelated = await Promise.all(
         filtered.map(v => api.getVideoDetail(v.video_id, channel?.channel_id || null))
       );
@@ -93,7 +88,8 @@ export const WatchPage = () => {
 
   useEffect(() => {
     loadVideoData();
-  }, [loadVideoData]);
+    setShowPlaylist(!!playlistId);
+  }, [loadVideoData, playlistId]);
 
   const handleProgressUpdate = async (seconds: number) => {
     if (isAuthenticated && channel && token && videoId) {
@@ -116,8 +112,6 @@ export const WatchPage = () => {
     try {
       await api.setReaction(channel.channel_id, token, 'video', videoId, newReaction);
       setUserReaction(newReaction);
-      
-      // Refresh video to update the like counter UI
       const updated = await api.getVideoDetail(videoId, channel.channel_id);
       setVideo(updated);
     } catch (err) {
@@ -163,10 +157,10 @@ export const WatchPage = () => {
     }
   };
 
-  const handleAddToPlaylist = async (playlistId: string) => {
+  const handleAddToPlaylist = async (plId: string) => {
     if (!token || !videoId) return;
     try {
-      await api.addVideoToPlaylist(playlistId, videoId, token);
+      await api.addVideoToPlaylist(plId, videoId, token);
       toast.success("Added to playlist");
       setIsSaveModalOpen(false);
     } catch (err: any) {
@@ -177,6 +171,12 @@ export const WatchPage = () => {
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
     toast.success('Link copied to clipboard!');
+  };
+
+  const handleClosePlaylist = () => {
+    setShowPlaylist(false);
+    searchParams.delete('playlist');
+    setSearchParams(searchParams);
   };
 
   if (isLoading) {
@@ -195,7 +195,6 @@ export const WatchPage = () => {
 
   if (!video) return null;
 
-  handleProgressUpdate(0)
   return (
     <Layout>
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -213,7 +212,7 @@ export const WatchPage = () => {
               <Link to={`/channel/${channelData?.channel_id}`}>
                 <Avatar className="w-10 h-10 border">
                   <AvatarImage src={channelData?.profile_pic_path} />
-                  <AvatarFallback className="bg-primary text-white">
+                  <AvatarFallback className="bg-primary text-primary-foreground">
                     {channelData?.display_name?.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
@@ -241,7 +240,6 @@ export const WatchPage = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Like/Dislike Group */}
               <div className="flex items-center bg-secondary rounded-full h-9">
                 <button 
                   onClick={() => handleReaction('like')} 
@@ -289,8 +287,17 @@ export const WatchPage = () => {
           <CommentSection videoId={video.video_id} />
         </div>
 
-        {/* Sidebar Related Videos */}
+        {/* Sidebar */}
         <div className="space-y-4">
+          {/* Playlist Sidebar */}
+          {showPlaylist && playlistId && (
+            <PlaylistSidebar 
+              playlistId={playlistId} 
+              currentVideoId={video.video_id}
+              onClose={handleClosePlaylist}
+            />
+          )}
+
           <h3 className="font-bold text-lg">Up Next</h3>
           <div className="flex flex-col gap-4">
             {relatedVideos.map((v) => (

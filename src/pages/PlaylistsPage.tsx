@@ -195,11 +195,26 @@ export const PlaylistsPage = () => {
               {expandedPlaylist === playlist.playlist_id && (
                 <div className="p-4 bg-background border-t border-border">
                   {playlistVideos[playlist.playlist_id]?.length ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {playlistVideos[playlist.playlist_id].map((video) => (
-                        <VideoCard key={video.video_id} video={video as Video} />
-                      ))}
-                    </div>
+                    <>
+                      <div className="flex justify-end mb-4">
+                        <Link 
+                          to={`/watch/${playlistVideos[playlist.playlist_id][0]?.video_id}?playlist=${playlist.playlist_id}`} 
+                          className="text-sm text-primary hover:underline"
+                        >
+                          Play all
+                        </Link>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {playlistVideos[playlist.playlist_id].map((video) => (
+                          <Link 
+                            key={video.video_id} 
+                            to={`/watch/${video.video_id}?playlist=${playlist.playlist_id}`}
+                          >
+                            <VideoCard video={video as Video} />
+                          </Link>
+                        ))}
+                      </div>
+                    </>
                   ) : (
                     <div className="py-8 text-center">
                       <p className="text-muted-foreground text-sm">This playlist is empty.</p>
