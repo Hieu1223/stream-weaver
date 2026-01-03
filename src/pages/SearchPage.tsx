@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { VideoCard } from '@/components/video/VideoCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,28 +28,39 @@ export const SearchPage = () => {
   const [cHasMore, setCHasMore] = useState(true);
   const [cLoading, setCLoading] = useState(false);
 
-  const observer = useRef<IntersectionObserver | null>(null);
+  const videoObserver = useRef<IntersectionObserver | null>(null);
+  const channelObserver = useRef<IntersectionObserver | null>(null);
 
-  const lastElementRef = useCallback(
+  const lastVideoRef = useCallback(
     (node: HTMLElement | null) => {
-      if (!node) return;
-      if (observer.current) observer.current.disconnect();
+      if (vLoading) return;
+      if (videoObserver.current) videoObserver.current.disconnect();
 
-      observer.current = new IntersectionObserver(entries => {
-        if (!entries[0].isIntersecting) return;
-
-        if (activeTab === 'videos' && vHasMore && !vLoading) {
+      videoObserver.current = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting && vHasMore) {
           setVPage(p => p + 1);
         }
+      });
 
-        if (activeTab === 'channels' && cHasMore && !cLoading) {
+      if (node) videoObserver.current.observe(node);
+    },
+    [vLoading, vHasMore]
+  );
+
+  const lastChannelRef = useCallback(
+    (node: HTMLElement | null) => {
+      if (cLoading) return;
+      if (channelObserver.current) channelObserver.current.disconnect();
+
+      channelObserver.current = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting && cHasMore) {
           setCPage(p => p + 1);
         }
       });
 
-      observer.current.observe(node);
+      if (node) channelObserver.current.observe(node);
     },
-    [activeTab, vHasMore, cHasMore, vLoading, cLoading]
+    [cLoading, cHasMore]
   );
 
   /** Reset on query change */
@@ -61,21 +73,20 @@ export const SearchPage = () => {
     setCHasMore(true);
   }, [query]);
 
-  /** Reset page when switching tabs */
-  useEffect(() => {
-    if (activeTab === 'videos' && videos.length === 0) setVPage(0);
-    if (activeTab === 'channels' && channels.length === 0) setCPage(0);
-  }, [activeTab]);
-
   /** Fetch Videos */
   useEffect(() => {
-    if (!query || activeTab !== 'videos' || !vHasMore) return;
+    if (!query || activeTab !== 'videos') return;
+    if (vPage === 0 && videos.length > 0) return; // prevent refetch on tab switch
 
     const load = async () => {
       setVLoading(true);
       try {
         const results = await api.searchVideos(query, vPage * LIMIT, LIMIT);
         if (results.length < LIMIT) setVHasMore(false);
+        if (results.length === 0) {
+          setVLoading(false);
+          return;
+        }
 
         const enriched = await Promise.all(
           results.map(async v => {
@@ -93,7 +104,8 @@ export const SearchPage = () => {
           })
         );
 
-        setVideos(prev => [...prev, ...enriched.filter(Boolean)]);
+        const valid = enriched.filter(Boolean) as (Video & { display_name?: string; profile_pic_path?: string })[];
+        setVideos(prev => vPage === 0 ? valid : [...prev, ...valid]);
       } finally {
         setVLoading(false);
       }
@@ -104,14 +116,15 @@ export const SearchPage = () => {
 
   /** Fetch Channels */
   useEffect(() => {
-    if (!query || activeTab !== 'channels' || !cHasMore) return;
+    if (!query || activeTab !== 'channels') return;
+    if (cPage === 0 && channels.length > 0) return;
 
     const load = async () => {
       setCLoading(true);
       try {
         const results = await api.searchChannels(query, cPage * LIMIT, LIMIT);
         if (results.length < LIMIT) setCHasMore(false);
-        setChannels(prev => [...prev, ...results]);
+        setChannels(prev => cPage === 0 ? results : [...prev, ...results]);
       } finally {
         setCLoading(false);
       }
@@ -120,39 +133,53 @@ export const SearchPage = () => {
     load();
   }, [query, cPage, activeTab]);
 
+  const handleTabChange = (value: string) => {
+    setActiveTab(value as 'videos' | 'channels');
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
         <h1 className="text-2xl font-bold">Results for "{query}"</h1>
 
-        <Tabs value={activeTab} onValueChange={v => setActiveTab(v as any)}>
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList>
-            <TabsTrigger value="videos">Videos ({videos.length})</TabsTrigger>
-            <TabsTrigger value="channels">Channels ({channels.length})</TabsTrigger>
+            <TabsTrigger value="videos">Videos</TabsTrigger>
+            <TabsTrigger value="channels">Channels</TabsTrigger>
           </TabsList>
 
           <TabsContent value="videos" className="mt-6">
+            {videos.length === 0 && !vLoading && (
+              <p className="text-muted-foreground text-center py-10">No videos found</p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {videos.map((v, i) => (
                 <div
-                  key={v.video_id}
-                  ref={i === videos.length - 1 ? lastElementRef : null}
+                  key={`${v.video_id}-${i}`}
+                  ref={i === videos.length - 1 ? lastVideoRef : null}
                 >
                   <VideoCard video={v} />
                 </div>
               ))}
             </div>
-            {vLoading && <div className="text-center py-10">Loading videos…</div>}
+            {vLoading && (
+              <div className="flex justify-center py-10">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="channels" className="mt-6">
+            {channels.length === 0 && !cLoading && (
+              <p className="text-muted-foreground text-center py-10">No channels found</p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {channels.map((ch, i) => (
                 <Link
-                  key={ch.channel_id}
-                  ref={i === channels.length - 1 ? lastElementRef : null}
+                  key={`${ch.channel_id}-${i}`}
+                  ref={i === channels.length - 1 ? lastChannelRef : null}
                   to={`/channel/${ch.channel_id}`}
-                  className="flex items-center gap-4 p-4 bg-secondary rounded-xl"
+                  className="flex items-center gap-4 p-4 bg-secondary rounded-xl hover:bg-accent transition-colors"
                 >
                   <Avatar>
                     <AvatarImage src={ch.profile_pic_path} />
@@ -161,13 +188,17 @@ export const SearchPage = () => {
                   <div>
                     <h3 className="font-semibold">{ch.display_name}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {ch.subscriber_count} subs
+                      {ch.subscriber_count ?? 0} subs
                     </p>
                   </div>
                 </Link>
               ))}
             </div>
-            {cLoading && <div className="text-center py-10">Loading channels…</div>}
+            {cLoading && (
+              <div className="flex justify-center py-10">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
