@@ -121,7 +121,7 @@ export const VideoCard = ({ video, onDelete, variant = 'grid' }: VideoCardProps)
 
         <div className="flex-1 min-w-0 relative">
           <h3 className={cn(
-            "font-semibold leading-tight mb-1 text-foreground line-clamp-2 transition-colors group-hover:text-primary",
+            "font-semibold leading-tight mb-1 text-foreground line-clamp-1 transition-colors group-hover:text-primary",
             isHorizontal ? "text-lg md:text-xl" : "text-sm"
           )}>
             {video.title}
