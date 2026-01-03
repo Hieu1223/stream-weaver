@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, Film, X, Image } from 'lucide-react';
+import { Upload, Film, X } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,10 +15,8 @@ export const UploadPage = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoUrl, setVideoUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [useUrl, setUseUrl] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const { channel, token, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -31,7 +29,6 @@ export const UploadPage = () => {
         return;
       }
       setVideoFile(file);
-      setUseUrl(false);
     }
   };
 
@@ -48,8 +45,8 @@ export const UploadPage = () => {
       return;
     }
 
-    if (!videoFile && !videoUrl.trim()) {
-      toast.error('Please provide a video file or YouTube URL');
+    if (!videoFile) {
+      toast.error('Please select a video file');
       return;
     }
 
@@ -62,23 +59,12 @@ export const UploadPage = () => {
         setUploadProgress(prev => Math.min(prev + 10, 90));
       }, 200);
 
-      let videoBlob: Blob;
-      
-      if (useUrl && videoUrl.trim()) {
-        // For YouTube URLs, we create a minimal blob with the URL as content
-        videoBlob = new Blob([videoUrl], { type: 'text/plain' });
-      } else if (videoFile) {
-        videoBlob = videoFile;
-      } else {
-        throw new Error('No video provided');
-      }
-
       const response = await api.createVideo(
         channel.channel_id,
         token,
         title,
         description,
-        videoBlob
+        videoFile
       );
 
       clearInterval(progressInterval);
@@ -113,86 +99,50 @@ export const UploadPage = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Video source selection */}
+          {/* Video upload */}
           <div className="space-y-4">
-            <Label>Video Source</Label>
-            <div className="flex gap-4">
-              <Button
-                type="button"
-                variant={!useUrl ? 'default' : 'secondary'}
-                onClick={() => setUseUrl(false)}
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Upload File
-              </Button>
-              <Button
-                type="button"
-                variant={useUrl ? 'default' : 'secondary'}
-                onClick={() => setUseUrl(true)}
-              >
-                <Film className="w-4 h-4 mr-2" />
-                YouTube URL
-              </Button>
-            </div>
-          </div>
-
-          {/* Video upload or URL input */}
-          {!useUrl ? (
-            <div className="space-y-4">
-              <input
-                ref={videoInputRef}
-                type="file"
-                accept="video/*"
-                onChange={handleVideoSelect}
+            <Label>Video File</Label>
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/*"
+              onChange={handleVideoSelect}
                 className="hidden"
               />
-              
-              {videoFile ? (
-                <div className="relative p-4 bg-secondary rounded-xl flex items-center gap-4">
-                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                    <Film className="w-6 h-6 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{videoFile.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setVideoFile(null)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
+            
+            {videoFile ? (
+              <div className="relative p-4 bg-secondary rounded-xl flex items-center gap-4">
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <Film className="w-6 h-6 text-primary" />
                 </div>
-              ) : (
-                <div
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{videoFile.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setVideoFile(null)}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <div
                   onClick={() => videoInputRef.current?.click()}
                   className="border-2 border-dashed border-border rounded-xl p-12 text-center cursor-pointer hover:border-primary transition-colors"
                 >
                   <Upload className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
                   <p className="font-medium">Click to select video file</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    MP4, WebM, or other video formats
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="videoUrl">YouTube URL</Label>
-              <Input
-                id="videoUrl"
-                type="url"
-                placeholder="https://www.youtube.com/watch?v=..."
-                value={videoUrl}
-                onChange={(e) => setVideoUrl(e.target.value)}
-                className="h-12"
-              />
-            </div>
-          )}
+                <p className="text-sm text-muted-foreground mt-1">
+                  MP4, WebM, or other video formats
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Title */}
           <div className="space-y-2">

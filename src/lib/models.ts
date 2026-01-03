@@ -5,6 +5,7 @@ export type TargetType = 'video' | 'comment';
 export interface Channel {
   channel_id: string;
   display_name: string;
+  username: string;
   description: string;
   profile_pic_path: string;
   subscriber_count: number;

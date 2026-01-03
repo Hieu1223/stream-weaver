@@ -1,7 +1,6 @@
-
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Save, Trash2, AlertTriangle } from 'lucide-react';
+import { Camera, Save, Trash2, AlertTriangle, KeyRound, User } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,30 +19,50 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import * as api from '@/lib/api';
 import { toast } from 'sonner';
 
 export const SettingsPage = () => {
-  const { channel, token, logout, refreshChannel, isAuthenticated } = useAuth();
+  const { channel, token, logout, refreshChannel, isAuthenticated, login } = useAuth();
   const [displayName, setDisplayName] = useState(channel?.display_name || '');
   const [description, setDescription] = useState(channel?.description || '');
 
-  // New States for Profile Picture
+  // Profile Picture States
   const [profileFile, setProfileFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // Password Change States
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+
+  // Username Change States
+  const [newUsername, setNewUsername] = useState('');
+  const [usernamePassword, setUsernamePassword] = useState('');
+  const [isChangingUsername, setIsChangingUsername] = useState(false);
+  const [usernameDialogOpen, setUsernameDialogOpen] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Handle File Selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setProfileFile(file);
-      // Create a local preview URL
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
     }
@@ -59,21 +78,102 @@ export const SettingsPage = () => {
 
     setIsSaving(true);
     try {
-      // Updated to match the new multipart API signature
       await api.updateChannel(channel.channel_id, {
         auth_token: token,
         display_name: displayName,
         description: description,
-        profile_pic: profileFile || undefined, // Pass the file if selected
+        profile_pic: profileFile || undefined,
       });
 
       await refreshChannel();
-      setProfileFile(null); // Clear pending file
+      setProfileFile(null);
       toast.success('Channel updated successfully!');
     } catch (err: any) {
       toast.error(err?.detail || 'Failed to update channel');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (!channel) return;
+
+    if (!oldPassword.trim()) {
+      toast.error('Please enter your current password');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      // First get a token with old credentials to verify
+      const authResponse = await api.getToken(channel.username, oldPassword);
+      
+      // Use the fresh token to update password
+      await api.updateChannel(channel.channel_id, {
+        auth_token: authResponse.auth_token,
+        password: newPassword,
+      });
+
+      // Re-login with new password
+      await login(channel.username, newPassword);
+      
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordDialogOpen(false);
+      toast.success('Password changed successfully!');
+    } catch (err: any) {
+      toast.error(err?.detail || 'Failed to change password. Check your current password.');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  const handleUsernameChange = async () => {
+    if (!channel) return;
+
+    if (!newUsername.trim()) {
+      toast.error('Please enter a new username');
+      return;
+    }
+
+    if (!usernamePassword.trim()) {
+      toast.error('Please enter your password');
+      return;
+    }
+
+    setIsChangingUsername(true);
+    try {
+      // Get token with current credentials
+      const authResponse = await api.getToken(channel.username, usernamePassword);
+      
+      // Update username
+      await api.updateChannel(channel.channel_id, {
+        auth_token: authResponse.auth_token,
+        username: newUsername,
+      });
+
+      // Re-login with new username
+      await login(newUsername, usernamePassword);
+      
+      setNewUsername('');
+      setUsernamePassword('');
+      setUsernameDialogOpen(false);
+      toast.success('Username changed successfully!');
+    } catch (err: any) {
+      toast.error(err?.detail || 'Failed to change username. Check your password.');
+    } finally {
+      setIsChangingUsername(false);
     }
   };
 
@@ -103,10 +203,12 @@ export const SettingsPage = () => {
       </Layout>
     );
   }
-  var profile_pic_path = channel.profile_pic_path
+
+  var profile_pic_path = channel.profile_pic_path;
   if (profile_pic_path.includes('files/')) {
-    profile_pic_path = `http://localhost:8000/${profile_pic_path}.jpg`
+    profile_pic_path = `http://localhost:8000/${profile_pic_path}.jpg`;
   }
+
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-8">
@@ -120,16 +222,12 @@ export const SettingsPage = () => {
           <div className="flex items-center gap-6">
             <div className="relative">
               <Avatar className="w-24 h-24">
-                <AvatarImage
-                  // Use local preview if available, otherwise fallback to saved path
-                  src={previewUrl || (profile_pic_path)}
-                />
+                <AvatarImage src={previewUrl || profile_pic_path} />
                 <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
                   {displayName.charAt(0).toUpperCase() || 'U'}
                 </AvatarFallback>
               </Avatar>
 
-              {/* Hidden File Input */}
               <input
                 type="file"
                 ref={fileInputRef}
@@ -148,6 +246,7 @@ export const SettingsPage = () => {
             </div>
             <div>
               <h3 className="font-semibold">{channel.display_name}</h3>
+              <p className="text-sm text-muted-foreground">@{channel.username}</p>
             </div>
           </div>
 
@@ -182,6 +281,124 @@ export const SettingsPage = () => {
             <Save className="w-4 h-4 mr-2" />
             {isSaving ? 'Saving...' : 'Save Changes'}
           </Button>
+        </div>
+
+        <Separator />
+
+        {/* Account Security Section */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <KeyRound className="w-5 h-5" />
+            Account Security
+          </h2>
+
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* Change Username Dialog */}
+            <Dialog open={usernameDialogOpen} onOpenChange={setUsernameDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <User className="w-4 h-4 mr-2" />
+                  Change Username
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Change Username</DialogTitle>
+                  <DialogDescription>
+                    Enter your password and new username.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="newUsername">New Username</Label>
+                    <Input
+                      id="newUsername"
+                      type="text"
+                      placeholder="Enter new username"
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="usernamePassword">Your Password</Label>
+                    <Input
+                      id="usernamePassword"
+                      type="password"
+                      placeholder="Enter your password"
+                      value={usernamePassword}
+                      onChange={(e) => setUsernamePassword(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setUsernameDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleUsernameChange} disabled={isChangingUsername}>
+                    {isChangingUsername ? 'Changing...' : 'Change Username'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Change Password Dialog */}
+            <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <KeyRound className="w-4 h-4 mr-2" />
+                  Change Password
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Change Password</DialogTitle>
+                  <DialogDescription>
+                    Enter your current password and a new password.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="oldPassword">Current Password</Label>
+                    <Input
+                      id="oldPassword"
+                      type="password"
+                      placeholder="Enter current password"
+                      value={oldPassword}
+                      onChange={(e) => setOldPassword(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      placeholder="Enter new password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      placeholder="Confirm new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setPasswordDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handlePasswordChange} disabled={isChangingPassword}>
+                    {isChangingPassword ? 'Changing...' : 'Change Password'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         <Separator />
