@@ -1,6 +1,13 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Save, Trash2, AlertTriangle, KeyRound, User } from 'lucide-react';
+import {
+  Camera,
+  Save,
+  Trash2,
+  AlertTriangle,
+  KeyRound,
+} from 'lucide-react';
+
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+
 import {
   Dialog,
   DialogContent,
@@ -28,48 +37,76 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+
 import { useAuth } from '@/contexts/AuthContext';
 import * as api from '@/lib/api';
 import { toast } from 'sonner';
 
+const BASE_URL = 'http://localhost:8000';
+
 export const SettingsPage = () => {
-  const { channel, token, logout, refreshChannel, isAuthenticated, login } = useAuth();
-  const [displayName, setDisplayName] = useState(channel?.display_name || '');
-  const [description, setDescription] = useState(channel?.description || '');
+  const {
+    channel,
+    token,
+    login,
+    logout,
+    refreshChannel,
+    isAuthenticated,
+  } = useAuth();
 
-  // Profile Picture States
-  const [profileFile, setProfileFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  // Password Change States
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
-
-  // Username Change States
-  const [newUsername, setNewUsername] = useState('');
-  const [usernamePassword, setUsernamePassword] = useState('');
-  const [isChangingUsername, setIsChangingUsername] = useState(false);
-  const [usernameDialogOpen, setUsernameDialogOpen] = useState(false);
-
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  /* ================= PROFILE ================= */
+  const [displayName, setDisplayName] = useState(channel?.display_name ?? '');
+  const [description, setDescription] = useState(channel?.description ?? '');
+  const [profileFile, setProfileFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  /* ================= CREDENTIALS ================= */
+  const [credentialsOpen, setCredentialsOpen] = useState(false);
+  const [isUpdatingCredentials, setIsUpdatingCredentials] = useState(false);
+
+  const [oldUsername, setOldUsername] = useState('');
+  const [oldPassword, setOldPassword] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  /* ================= DELETE ================= */
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  if (!isAuthenticated || !channel) {
+    return (
+      <Layout>
+        <div className="text-center py-20">
+          <h1 className="text-2xl font-bold mb-4">
+            Sign in to access settings
+          </h1>
+          <Button onClick={() => navigate('/login')}>Sign In</Button>
+        </div>
+      </Layout>
+    );
+  }
+
+  const profilePic =
+    channel.profile_pic_path?.includes('files/')
+      ? `${BASE_URL}/${channel.profile_pic_path}.jpg`
+      : channel.profile_pic_path;
+
+  /* ================= HANDLERS ================= */
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setProfileFile(file);
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-    }
+    if (!file) return;
+
+    setProfileFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
   };
 
-  const handleSave = async () => {
-    if (!channel || !token) return;
+  const handleSaveProfile = async () => {
+    if (!token) return;
 
     if (!displayName.trim()) {
       toast.error('Display name is required');
@@ -81,111 +118,83 @@ export const SettingsPage = () => {
       await api.updateChannel(channel.channel_id, {
         auth_token: token,
         display_name: displayName,
-        description: description,
-        profile_pic: profileFile || undefined,
+        description,
+        profile_pic: profileFile ?? undefined,
       });
 
       await refreshChannel();
       setProfileFile(null);
-      toast.success('Channel updated successfully!');
+      toast.success('Profile updated');
     } catch (err: any) {
-      toast.error(err?.detail || 'Failed to update channel');
+      toast.error(err?.detail || 'Failed to update profile');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handlePasswordChange = async () => {
-    if (!channel) return;
-
-    if (!oldPassword.trim()) {
-      toast.error('Please enter your current password');
+  const handleCredentialsChange = async () => {
+    if (!oldUsername || !oldPassword) {
+      toast.error('Old username and password are required');
       return;
     }
 
-    if (newPassword.length < 6) {
-      toast.error('New password must be at least 6 characters');
+    if (!newUsername && !newPassword) {
+      toast.error('Enter a new username or password');
       return;
     }
 
-    if (newPassword !== confirmPassword) {
+    if (newPassword && newPassword !== confirmPassword) {
       toast.error('Passwords do not match');
       return;
     }
 
-    setIsChangingPassword(true);
+    setIsUpdatingCredentials(true);
     try {
-      // First get a token with old credentials to verify
-      const authResponse = await api.getToken(channel.username, oldPassword);
-      
-      // Use the fresh token to update password
-      await api.updateChannel(channel.channel_id, {
-        auth_token: authResponse.auth_token,
-        password: newPassword,
+      // 1️⃣ Authenticate with OLD credentials
+      const auth = await api.getToken(oldUsername, oldPassword);
+
+      // 2️⃣ Update channel
+      const res = await api.updateChannel(channel.channel_id, {
+        auth_token: auth.auth_token,
+        username: newUsername || undefined,
+        password: newPassword || undefined,
       });
 
-      // Re-login with new password
-      await login(channel.username, newPassword);
-      
+      // 3️⃣ Update auth context with NEW token
+      if (res.auth_token) {
+        await login(
+          newUsername || oldUsername,
+          newPassword || oldPassword
+        );
+      }
+
+      await refreshChannel();
+
+      // Cleanup
+      setOldUsername('');
       setOldPassword('');
+      setNewUsername('');
       setNewPassword('');
       setConfirmPassword('');
-      setPasswordDialogOpen(false);
-      toast.success('Password changed successfully!');
+      setCredentialsOpen(false);
+
+      toast.success('Credentials updated');
     } catch (err: any) {
-      toast.error(err?.detail || 'Failed to change password. Check your current password.');
+      toast.error(err?.detail || 'Failed to update credentials');
     } finally {
-      setIsChangingPassword(false);
-    }
-  };
-
-  const handleUsernameChange = async () => {
-    if (!channel) return;
-
-    if (!newUsername.trim()) {
-      toast.error('Please enter a new username');
-      return;
-    }
-
-    if (!usernamePassword.trim()) {
-      toast.error('Please enter your password');
-      return;
-    }
-
-    setIsChangingUsername(true);
-    try {
-      // Get token with current credentials
-      const authResponse = await api.getToken(channel.username, usernamePassword);
-      
-      // Update username
-      await api.updateChannel(channel.channel_id, {
-        auth_token: authResponse.auth_token,
-        username: newUsername,
-      });
-
-      // Re-login with new username
-      await login(newUsername, usernamePassword);
-      
-      setNewUsername('');
-      setUsernamePassword('');
-      setUsernameDialogOpen(false);
-      toast.success('Username changed successfully!');
-    } catch (err: any) {
-      toast.error(err?.detail || 'Failed to change username. Check your password.');
-    } finally {
-      setIsChangingUsername(false);
+      setIsUpdatingCredentials(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!channel || !token) return;
+    if (!token) return;
 
     setIsDeleting(true);
     try {
       await api.deleteChannel(channel.channel_id, token);
       logout();
-      toast.success('Channel deleted');
       navigate('/');
+      toast.success('Channel deleted');
     } catch (err: any) {
       toast.error(err?.detail || 'Failed to delete channel');
     } finally {
@@ -193,258 +202,109 @@ export const SettingsPage = () => {
     }
   };
 
-  if (!isAuthenticated || !channel) {
-    return (
-      <Layout>
-        <div className="text-center py-20">
-          <h1 className="text-2xl font-bold mb-4">Sign in to access settings</h1>
-          <Button onClick={() => navigate('/login')}>Sign In</Button>
-        </div>
-      </Layout>
-    );
-  }
-
-  var profile_pic_path = channel.profile_pic_path;
-  if (profile_pic_path.includes('files/')) {
-    profile_pic_path = `http://localhost:8000/${profile_pic_path}.jpg`;
-  }
+  /* ================= RENDER ================= */
 
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-8">
-        <div>
-          <h1 className="text-2xl font-display font-bold">Channel Settings</h1>
-          <p className="text-muted-foreground mt-1">Manage your channel profile</p>
-        </div>
+        <h1 className="text-2xl font-bold">Channel Settings</h1>
 
-        {/* Profile section */}
+        {/* PROFILE */}
         <div className="space-y-6">
           <div className="flex items-center gap-6">
             <div className="relative">
               <Avatar className="w-24 h-24">
-                <AvatarImage src={previewUrl || profile_pic_path} />
-                <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
-                  {displayName.charAt(0).toUpperCase() || 'U'}
+                <AvatarImage src={previewUrl || profilePic} />
+                <AvatarFallback>
+                  {displayName.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-
               <input
-                type="file"
                 ref={fileInputRef}
+                type="file"
                 className="hidden"
                 accept="image/*"
                 onChange={handleFileChange}
               />
-
               <button
-                type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="absolute bottom-0 right-0 p-2 bg-secondary rounded-full border border-border hover:bg-muted transition-colors"
+                className="absolute bottom-0 right-0 p-2 bg-secondary rounded-full"
               >
                 <Camera className="w-4 h-4" />
               </button>
             </div>
-            <div>
-              <h3 className="font-semibold">{channel.display_name}</h3>
-              <p className="text-sm text-muted-foreground">@{channel.username}</p>
-            </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="displayName">Display Name</Label>
-              <Input
-                id="displayName"
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="h-12"
-                maxLength={50}
-              />
-            </div>
+          <Label>Display Name</Label>
+          <Input value={displayName} onChange={e => setDisplayName(e.target.value)} />
 
-            <div className="space-y-2">
-              <Label htmlFor="description">About</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Tell viewers about your channel"
-                className="min-h-[120px] resize-none"
-                maxLength={1000}
-              />
-              <p className="text-xs text-muted-foreground text-right">{description.length}/1000</p>
-            </div>
-          </div>
+          <Label>About</Label>
+          <Textarea value={description} onChange={e => setDescription(e.target.value)} />
 
-          <Button onClick={handleSave} disabled={isSaving} className="glow">
+          <Button onClick={handleSaveProfile} disabled={isSaving}>
             <Save className="w-4 h-4 mr-2" />
-            {isSaving ? 'Saving...' : 'Save Changes'}
+            {isSaving ? 'Saving...' : 'Save'}
           </Button>
         </div>
 
         <Separator />
 
-        {/* Account Security Section */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <KeyRound className="w-5 h-5" />
-            Account Security
-          </h2>
+        {/* CREDENTIALS */}
+        <Dialog open={credentialsOpen} onOpenChange={setCredentialsOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline">
+              <KeyRound className="w-4 h-4 mr-2" />
+              Change Credentials
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Change Credentials</DialogTitle>
+              <DialogDescription>
+                Authenticate with old credentials to change username or password.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Change Username Dialog */}
-            <Dialog open={usernameDialogOpen} onOpenChange={setUsernameDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <User className="w-4 h-4 mr-2" />
-                  Change Username
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Change Username</DialogTitle>
-                  <DialogDescription>
-                    Enter your password and new username.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="newUsername">New Username</Label>
-                    <Input
-                      id="newUsername"
-                      type="text"
-                      placeholder="Enter new username"
-                      value={newUsername}
-                      onChange={(e) => setNewUsername(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="usernamePassword">Your Password</Label>
-                    <Input
-                      id="usernamePassword"
-                      type="password"
-                      placeholder="Enter your password"
-                      value={usernamePassword}
-                      onChange={(e) => setUsernamePassword(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setUsernameDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleUsernameChange} disabled={isChangingUsername}>
-                    {isChangingUsername ? 'Changing...' : 'Change Username'}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Input placeholder="Old username" value={oldUsername} onChange={e => setOldUsername(e.target.value)} />
+            <Input type="password" placeholder="Old password" value={oldPassword} onChange={e => setOldPassword(e.target.value)} />
 
-            {/* Change Password Dialog */}
-            <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <KeyRound className="w-4 h-4 mr-2" />
-                  Change Password
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Change Password</DialogTitle>
-                  <DialogDescription>
-                    Enter your current password and a new password.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="oldPassword">Current Password</Label>
-                    <Input
-                      id="oldPassword"
-                      type="password"
-                      placeholder="Enter current password"
-                      value={oldPassword}
-                      onChange={(e) => setOldPassword(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="newPassword">New Password</Label>
-                    <Input
-                      id="newPassword"
-                      type="password"
-                      placeholder="Enter new password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      placeholder="Confirm new password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setPasswordDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handlePasswordChange} disabled={isChangingPassword}>
-                    {isChangingPassword ? 'Changing...' : 'Change Password'}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
+            <Input placeholder="New username (optional)" value={newUsername} onChange={e => setNewUsername(e.target.value)} />
+            <Input type="password" placeholder="New password (optional)" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+            <Input type="password" placeholder="Confirm new password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+
+            <DialogFooter>
+              <Button onClick={handleCredentialsChange} disabled={isUpdatingCredentials}>
+                {isUpdatingCredentials ? 'Updating...' : 'Update'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Separator />
 
-        {/* Danger zone */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-destructive flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5" />
-            Danger Zone
-          </h2>
-
-          <div className="p-4 border border-destructive/30 rounded-xl bg-destructive/5">
-            <h3 className="font-medium">Delete Channel</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              Permanently delete your channel and all associated videos. This action cannot be undone.
-            </p>
-
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="mt-4">
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete Channel
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete your channel "{channel.display_name}" and all your videos.
-                    This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    {isDeleting ? 'Deleting...' : 'Delete Channel'}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </div>
+        {/* DELETE */}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Channel
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action is permanent.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Layout>
   );
