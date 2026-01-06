@@ -156,8 +156,8 @@ export const SettingsPage = () => {
       // 2️⃣ Update channel
       const res = await api.updateChannel(channel.channel_id, {
         auth_token: auth.auth_token,
-        username: newUsername || undefined,
-        password: newPassword || undefined,
+        username: newUsername || oldUsername,
+        password: newPassword || oldPassword,
       });
 
       // 3️⃣ Update auth context with NEW token

@@ -97,6 +97,7 @@ export const getChannelDetail = (id: string): Promise<Channel> =>
 
 export const updateChannel = async (channelId: string, data: UpdateChannelData): Promise<UpdateChannelResponse> => {
   const formData = new FormData();
+  console.log(data)
   formData.append("auth_token", data.auth_token);
   if (data.display_name) formData.append("display_name", data.display_name);
   if (data.description) formData.append("description", data.description);
