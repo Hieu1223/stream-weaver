@@ -136,3 +136,9 @@ export interface LightWeightChannel{
 export interface SubscriptionStatusResponse {
   is_subscribed: boolean;
 }
+
+export interface ChannelCreationForm {
+  message: string,
+  auth_token: string,
+  channel_id: string
+}

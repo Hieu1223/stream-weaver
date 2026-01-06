@@ -3,7 +3,8 @@ import {
   MessageResponse, AuthResponse, CreateCommentResponse, CreateVideoResponse,
   UpdateChannelData, UpdateChannelResponse, UpdateVideoData, UpdateVideoResponse,
   HistoryUpdateResponse, WatchProgress, ReactionResponse, ReactionStatus,
-  ReactionType, TargetType, LightWeightVideo, LightWeightChannel, SubscriptionStatusResponse
+  ReactionType, TargetType, LightWeightVideo, LightWeightChannel, SubscriptionStatusResponse,
+  ChannelCreationForm
 } from './models';
 
 const BASE_URL = "http://localhost:8000";
@@ -88,7 +89,7 @@ export const getIdFromToken = (token: string): Promise<{ channel_id: string }> =
 
 // --- CHANNELS ---
 
-export const createChannel = (data: Partial<Channel> & { password?: string }): Promise<Channel & { message: string }> =>
+export const createChannel = (data: ChannelCreationForm & { password?: string }): Promise<Channel & { message: string }> =>
   _request("/management/channels/", { method: "POST", body: JSON.stringify(data) });
 
 export const getChannelDetail = (id: string): Promise<Channel> =>
